@@ -1,0 +1,487 @@
+---
+title: "Cluster Analysis on Australian Athletes Data"
+author: "Yehia Abdelmohsen (900193174)"
+date: "4/24/2022"
+output:
+  html_document:
+    css: style.css
+    df_print: paged
+  pdf_document:
+    fig_caption: yes
+header-includes: \usepackage{wrapfig} \usepackage{float} \floatplacement{figure}{H}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r include=FALSE}
+# Hungarian Method Code
+minWeightBipartiteMatching <- function(clusteringA, clusteringB) {
+  require(clue)
+  idsA <- unique(clusteringA)  # distinct cluster ids in a
+  idsB <- unique(clusteringB)  # distinct cluster ids in b
+  nA <- length(clusteringA)  # number of instances in a
+  nB <- length(clusteringB)  # number of instances in b
+  if (length(idsA) != length(idsB) || nA != nB) {
+    stop("number of clusters or number of instances do not match")
+  }
+ 
+  nC <- length(idsA)
+  tupel <- c(1:nA)
+ 
+  # computeing the distance matrix
+  assignmentMatrix <- matrix(rep(-1, nC * nC), nrow = nC)
+  for (i in 1:nC) {
+    tupelClusterI <- tupel[clusteringA == i]
+    solRowI <- sapply(1:nC, function(i, clusterIDsB, tupelA_I) {
+      nA_I <- length(tupelA_I)  # number of elements in cluster I
+      tupelB_I <- tupel[clusterIDsB == i]
+      nB_I <- length(tupelB_I)
+      nTupelIntersect <- length(intersect(tupelA_I, tupelB_I))
+      return((nA_I - nTupelIntersect) + (nB_I - nTupelIntersect))
+    }, clusteringB, tupelClusterI)
+    assignmentMatrix[i, ] <- solRowI
+  }
+ 
+  # optimization
+  result <- solve_LSAP(assignmentMatrix, maximum = FALSE)
+  attr(result, "assignmentMatrix") <- assignmentMatrix
+  return(result)
+}
+# R2
+R2=function(x,clusters,k=3){
+  n=nrow(x); tss=var(x); tss=(n-1)*sum(diag(tss));
+  wss=0
+  for(j in 1:k){
+    cj=x[clusters==j,]; nj=nrow(cj); vj=var(cj); wssj=0
+    if(is.matrix(cj)) wssj=(nj-1)*sum(diag(vj)); wss=wss+wssj
+  }
+  r2=1-wss/tss; cat("R2 = ",r2,"\n")
+  return(r2)
+}
+```
+
+\pagebreak
+\tableofcontents
+\pagebreak
+# Introduction
+The data presented contains information for athletes from different types of sports. The purpose of collecting the data was to test if blood hemoglobin levels are different when comparing endurance-related athletes to those in power-related events. In this analysis, we will aim to cluster the athletes into their respective events. We will also check if the clustering algorithm splits the athletes into male and female. Finally, we will add a new class variable which represents whether the athlete participates in endurance/power events and check if the clustering algorithm followed that idea.
+
+# About the Data
+The data presented contains information related to Australian athletes. It contains 202 observations where each observation represents an athlete. There are 13 variables include the class variable which represents the sport the athlete plays.
+\newline
+\par
+\noindent
+The data is obtained from R, its documentation is linked below.
+\newline
+\par
+\noindent
+Source: \url{https://vincentarelbundock.github.io/Rdatasets/doc/DAAG/ais.html}
+
+## Variables
+\begin{itemize}
+    \item Rcc - Red blood cell count. This is a quantitative variable.
+    \item Wcc - White blood cell count, per liter. This is a quantitative variable.
+    \item Hematocrit - Percent of hematocrit. Hematocrit: The ratio of the volume of red blood cells to the total volume of blood. This is a quantitative variable.
+    \item Hg - Hemaglobin concentration in g per decaliter (10 liters). Hemaglobin: A protein that carries oxygen to organs. This is a quantitative variable.
+    \item Ferr - Plasma ferritins in ng. Measures the amount of ferritin in blood. Ferritin is a blood protein that contains iron. This is a quantitative variable.
+    \item Bmi - Body mass index, in kg/\(m^2\). Body mass divided by the square of the height \(m^2\). This is a quantitative variable.
+    \item Ssf - Sum of skin folds. Estimates the percentage of body fat by measuring skin fold thickness. This is a quantitative variable.
+    \item PcBfat - Percentage of body fat. This is a quantitative variable.
+    \item Lbm - Lean body mass in kg. Total body weight minus body fat weight. This is a quantitative variable.
+    \item Ht - Height in cm. This is a quantitative variable.
+    \item Wt - Weight in kg. This is a quantitative variable.
+    \item Sex - A factor representing the sex of the athlete: female and male. This is a qualitative categorical variable.
+    \item Sport - A factor representing the sport the athlete plays B Ball, Field, Gym, Netball, Row, Swim, T 400m, T Sprnt, Tennis, and W Polo. This is a qualitative categorical variable and will be used as the class variable.
+\end{itemize}
+
+## Some Remarks Regarding the Data
+Below is an initial look at the data.
+```{r echo=FALSE}
+df = read.csv("https://vincentarelbundock.github.io/Rdatasets/csv/DAAG/ais.csv",stringsAsFactors = T)
+df = df[,-1]
+knitr::kable(head(df[,1:6],2))
+knitr::kable(head(df[,7:13],2))
+```
+
+Here is a look at the sports the athletes participate in.
+```{r echo=FALSE}
+levels(df$sport)
+```
+
+# Problem Statement
+The data contains quantitative variables we can use to cluster the data. The aim of this analysis:
+\begin{itemize}
+  \item Firstly, we will see if we can cluster the data into ten classes each one representing a sport.
+  \item If we are not able to cluster into the ten sports. We will try to either cluster into female and male or power-related and endurance-related.
+\end{itemize}
+
+# Some Graphs
+## Clustering into Sports 
+In Figure 1, the various sports are colored differently. It is obvious that the sports are not easily distinguishable from each other using two variables.
+```{r echo=F,out.width="60%",fig.align='center',fig.cap="Pairs Plot"}
+colors = c('black', 'red','blue','purple','pink','green','cornflowerblue','darkgoldenrod1','peachpuff3','turquoise3')[unclass(df$sport)]
+pairs(df[,1:4],col=colors)
+```
+
+Again, in Figure 2 we are not able to distinguish between the sports using any of the two variables. The only points that we are able to distinguish from the rest are the red points in the BMI graphs, which represent athletes in field sports. Field sports in Track and Field are those that include jumping (e.g. long jump, high jump) and throwing (e.g. shot put, javelin). Usually throwing athletes are very heavy athletes due to the nature of their sport. This explains the clear distinction between them and the rest of the sports.
+```{r echo=F,out.width="60%",fig.align='center',fig.cap="Pairs Plot"}
+pairs(df[,5:8],col=colors)
+```
+Other than the point mentioned regarding field athletes, the sports overlap in most cases and it is hard to distinguish between them in 2D. We will see what the clustering algorithms can do in higher dimensions.
+
+
+## Clustering into Male and Female
+
+In Figure 3, we can see that the two clusters are clearly distinguishable. Men are represented by red points and women are represented by black points. If I were to use one variable to distinguish between the two it would be Hemoglobin (hg) since there is a very clear distinction. Hemotacrit (hc) is a close second to distinguish between the variables. To view more pair plots jump to appendix section: [Pair Plots].
+```{r echo=F,out.width="60%",fig.align='center',fig.cap="Pairs Plot"}
+colors_sex = c('black', 'red')[unclass(df$sex)]
+pairs(df[,1:4],col=colors_sex)
+```
+
+
+## Clustering into Power-related and Endurance-related sports
+
+```{r echo=F}
+pow_end <- function(i) {
+   if(i %in% c("B_Ball","Row","T_400m","Tennis","W_Polo")) {
+        # endurance
+        return(1)
+   } else if(i %in% c("Gym","Netball","Swim","T_Sprnt","Field")) {
+        # power
+        return(2)
+    }
+}
+p = sapply(df$sport,pow_end)
+df$powend = p
+
+```
+
+Given that the data related to the sports being characterized as power or endurance sports is not available, I had to research the topic. Some sources said that a sport was endurance based and some power based. Therefore, I used some common knowledge and the sources information to split the sports. I decided to split them in the following way.
+\newline
+\par
+\noindent
+Endurance sports: Basketball, Rowing, Sprint (400m), Tennis, and Water Polo.
+\newline
+\noindent
+Power sports: Gym, Netball, Swimming, Sprints (<400m), and Field.
+\newline
+\par
+\noindent
+Obviously, we can see in Figure 4 that it is not easy to distinguish between the sports in 2D. That is of course under the assumption that my splitting of the sports is correct. We will move forward with this assumption, and we will see if the clustering algorithms give us any interesting results.
+```{r echo=F,out.width="60%",fig.align='center',fig.cap="Pairs Plot"}
+pairs(df[,1:4],col=df$powend)
+```
+
+
+
+# Clustering
+
+## Hierarchical
+
+```{r include=F}
+# we are going to check the accuracy of the clustering algorithm with these 
+sports = as.numeric(df$sport)
+s = as.numeric(df$sex)
+powend = df$powend
+```
+
+```{r include=F}
+table(df$sport)
+```
+
+Below are the sports with their corresponding number equivalents. In addition, the last column represents the number of athletes in the data from the corresponding sport.
+```{r echo=F}
+df_sport = data.frame(df$sport)
+sports_ = cbind(sports,df_sport)
+count = c(25,37,23,22,19,29,15,11,4,17)
+knitr::kable(cbind(unique(sports_),count),caption = "Cluster Numbers and Count")
+```
+
+```{r include=F}
+# removing the last three columns that represent the classes
+cluster_df = df[,-seq(12,14,1)]
+```
+
+### Male and Female
+The output in Figure 5 shows results when using euclidian distance for distances between points and Ward \(D\) for distances between clusters. The output will be tested to see if the clusters represent male and female.
+```{r echo=F,out.width="60%",fig.align='center',fig.cap="Hierarchical Clustering (k=2)"}
+x = as.matrix(cluster_df)
+x=scale(x, center=TRUE, scale=TRUE)
+dissimilarity = dist(x,method='euclidian')
+hc = hclust(dissimilarity,method='ward.D')
+plot(hc)
+clusters=cutree(hc,k=2)
+rect.hclust(hc, k=2, border="red")
+```
+
+Another iteration was run where euclidian distance was used for distances between points and Ward \(D^2\) for distances between clusters (Figure 6). However, the result of using euclidian distance for distances between points and Ward \(D\) for distances between clusters was more accurate when computing the classification error. Other iterations were examined (e.g. manhattan and complete linkage, euclidian and single linkage), but none really provided results like euclidian and Ward \(D\) (in terms of classification error), therefore, we will move forward with this combination.
+```{r echo=F,out.width="60%",fig.align='center',fig.cap="Hierarchical Clustering (k=2)"}
+# euclidian ward 2.9
+# euclidian wardd2 3.9
+# wucldian complete 6.9
+# manhattan ward 5.9
+# manhattan ward 4.9
+dissimilaritye = dist(x,method='euclidian')
+hce = hclust(dissimilaritye,method='ward.D2')
+plot(hce)
+clusterse=cutree(hce,k=2)
+rect.hclust(hce, k=2, border="red")
+```
+
+We then computed the confusion matrix for the case where the two clusters are assumed to be male and female. An error rate of 2.9% is observed. This is a very convincing error rate. It shows that we can distinguish between male and female athletes given that we have information related to their blood and body (e.g. Hemoglobin, BMI, Weight). The success of clustering into male and female foreshadows the failure of clustering into ten sports. Nevertheless, we will still give it a shot.
+```{r echo=F}
+cm=table(clusters,s); #  plot(x,pch=19,col=hd.clust)
+#print(cm)
+knitr::kable(cm,caption = "Confusion Matrix (Clusters Represent Gender)")
+cat(" Error rate =",1-sum(diag(cm))/sum(cm),"\n")
+R2(x,clusters,2)
+```
+
+### Sports
+```{r echo=F,out.width="60%",fig.align='center',fig.cap="Hierarchical Clustering (k=10)"}
+# manhattan ward d2 60
+dissimilarity10 = dist(x,method='manhattan')
+hc10 = hclust(dissimilarity10,method='ward.D2')
+plot(hc10)
+clusters10=cutree(hc10,k=10)
+rect.hclust(hc, k=10, border="red")
+```
+
+Figure 7 shows the clusters when \(k=10\). The output below shows an error rate of about 60%. This is very high and suggests that the clusters do not represent the sports. The idea that male and female athletes aren't likely to be in the same clusters shows that we may need 17 clusters. 8 for male athlete sports and 9 for female athlete sports. This leads us to believe that splitting the data into male and female, then clustering may improve our chances in reaching a convincing error rate.
+```{r echo=F}
+cm=table(clusters10,sports);
+match.label=minWeightBipartiteMatching(clusters10,sports); id=c(match.label); cm=cm[,id]
+knitr::kable(cm,caption = 'Confusion Matrix (Clusters Represent Sports)')
+#cm=table(clusters10,sports);
+cat(" Error rate =",1-sum(diag(cm))/sum(cm),"\n")
+R2(x,clusters10,10)
+```
+
+
+```{r include=F}
+# Splitting data into male and female
+df_mf = df[,-c(14)]
+
+male = df_mf[df_mf[,12]=='m',]
+male_sports = as.numeric(male[,13])
+male = male[,-c(12,13)]
+male = as.matrix(male)
+male = scale(male, center=TRUE, scale=TRUE)
+
+female = df_mf[df_mf[,12]=='f',]
+female_sports = as.numeric(female[,13])
+female = female[,-c(12,13)]
+female = as.matrix(female)
+female = scale(female, center=TRUE, scale=TRUE)
+```
+
+After splitting the data into male and female we clustered using euclidian distance and Ward \(D^2\). The output shown in Figure 8 represents the male subset in the data. There are 102 male observations in the data.
+```{r echo=F,out.width="60%",fig.align='center',fig.cap="Hierarchical Clustering (k=8)"}
+dissimilarity8male = dist(male,method='euclidian')
+hc8male = hclust(dissimilarity8male,method='ward.D2')
+plot(hc8male)
+clusters8male=cutree(hc8male,k=8)
+rect.hclust(hc8male, k=8, border="red")
+```
+
+After looking at the error rate for multiple combinations of distance between point measures and distance between clusters measures, we decided on euclidian distance and Ward \(D^2\). It had the smallest error rate. This error rate 83%, however, is not very convincing. It's important to note that the small size of the data may be a factor that influences the clustering algorithm, and that more data may help decrease the error rate.
+```{r echo=F}
+cm=table(clusters8male,male_sports);
+match.label = minWeightBipartiteMatching(clusters8male,male_sports); id = c(match.label); cm = cm[,id]
+knitr::kable(cm,caption = 'Confusion Matrix (Clusters Represent Male Sports)')
+cat(" Error rate =",1-sum(diag(cm))/sum(cm),"\n")
+R2(male,clusters8male,8)
+```
+
+Figure 9 shows the clustering results when clustering \(k=9\) for female athletes.
+```{r echo=F,out.width="60%",fig.align='center',fig.cap="Hierarchical Clustering (k=8)"}
+dissimilarity9female = dist(female,method='manhattan')
+hc9female = hclust(dissimilarity9female,method='ward.D')
+plot(hc9female)
+clusters9female=cutree(hc9female,k=9)
+rect.hclust(hc9female, k=9, border="red")
+```
+
+The error rate is 56%, which is better than 83%. However, it is not too far off from 60% when the male and female athletes were in one set. This leads us to the conclusion that separating the data into male and female is not the best idea.
+```{r echo=F}
+cm = table(clusters9female,female_sports);
+match.label = minWeightBipartiteMatching(clusters9female,female_sports); id = c(match.label); cm = cm[,id]
+knitr::kable(cm,caption = 'Confusion Matrix (Clusters Represent Female Sports)')
+cat(" Error rate =",1-sum(diag(cm))/sum(cm),"\n")
+R2(female,clusters9female,9)
+```
+
+### Power/Endurance Sports
+Now looking at the error rate when power/endurance sports are assumed to be the classes. It is considerably high 46%. This leads us to believe that Power/Endurance sports do not represent the clusters. However, this may also be the result of incorrect allocation of the sports into power/endurance.
+```{r echo=F}
+cm = table(clusters,powend);
+match.label = minWeightBipartiteMatching(clusters,powend); id = c(match.label); cm = cm[,id]
+knitr::kable(cm,caption = "Confusion Matrix (Clusters Represent Power/Endurance Sports")
+cat(" Error rate =",1-sum(diag(cm))/sum(cm),"\n")
+R2(x,clusters,2)
+```
+
+## K-Means
+
+Note: Results in this section are different with every run due to the non-deterministic nature of k-Means. Therefore, explanations may not align exactly with the numbers available in the code.
+\par
+\noindent
+\newline
+We will now be using k-Means to cluster the data. We can determine the number of clusters using the elbow curve shown in Figure 9. In this case, I would choose \(k=4\). However, since we are assuming a \(k\) already we will not be using it.
+```{r echo=F,out.width="60%",fig.align='center',fig.cap="Determining the Number of Clusters"}
+# Number of Clusters
+wss=c()
+for (i in 2:10) {
+  wss[i] = kmeans(x,centers=i)$tot.withinss}
+plot(wss, type="b", pch=19, xlab="k",ylab="WSS", main="The L-Curve")
+```
+
+### Male and Female
+
+```{r echo=F}
+k=2; kmc = kmeans(x, k);
+clusters=kmc$cluster
+knitr::kable(table(clusters), caption="The Number of Individuals in Each Cluster")
+```
+
+When clustering using k-Means, we obtain similar results to Hierarchical clustering. Results show an error rate of 3.9% when the clusters are assumed to be male and female athletes. Out of 202 observations there are 8 misclassifications. These are very convincing results and are almost identical to [Hierarchical (Euclidian and Ward D2)] available in the appendix.
+```{r echo=F}
+cm=table(clusters,s); #  plot(x,pch=19,col=hd.clust)
+match.label = minWeightBipartiteMatching(clusters,s); id = c(match.label); cm = cm[,id]
+#print(cm)
+knitr::kable(cm,caption = "Confusion Matrix (Clusters Represent Gender - k=2)")
+cat(" Error rate =",1-sum(diag(cm))/sum(cm),"\n")
+R2(x,clusters,2)
+```
+
+### Sports
+
+
+```{r include=F}
+k=10; kmc = kmeans(x, k);
+clusters=kmc$cluster
+table(clusters)
+```
+
+When clustering using k-Means where \(k=10\), results are again similar to that of [Hierarchical] clustering. The error rate is 67%. This shows that the clusters do not represent the sports.
+```{r echo=F}
+cm=table(clusters,sports); #  plot(x,pch=19,col=hd.clust)
+match.label = minWeightBipartiteMatching(clusters,sports); id = c(match.label); cm = cm[,id]
+#print(cm)
+knitr::kable(cm,caption = "Confusion Matrix (Clusters Represent Sports)")
+cat(" Error rate =",1-sum(diag(cm))/sum(cm),"\n")
+R2(x,clusters,2)
+```
+
+
+```{r include=F}
+k=8; kmc = kmeans(male, k);
+clusters=kmc$cluster
+table(clusters)
+```
+
+We then split the data exactly like we did in [Hierarchical] clustering into male and female athletes. The results were quite similar. For male athletes, the classification of sport resulted in an error rate of 87%, which is quite high. In this same case [Hierarchical] clustering resulted in an error rate of 83%.
+```{r echo=F}
+cm=table(clusters,male_sports);
+match.label = minWeightBipartiteMatching(clusters,male_sports); id = c(match.label); cm = cm[,id]
+#print(cm)
+knitr::kable(cm,caption = "Confusion Matrix (Clusters Represent Male Sports - k=8)")
+cat(" Error rate =",1-sum(diag(cm))/sum(cm),"\n")
+R2(x,clusters,2)
+```
+
+
+```{r include=F}
+k=9; kmc = kmeans(female, k);
+clusters=kmc$cluster
+table(clusters)
+```
+
+Again, we did the same thing for female athletes. The results were also similar to [Hierarchical] clustering. The error rate was 60%. In this case [Hierarchical] clustering resulted in an error rate of 56%.
+```{r echo=F}
+cm=table(clusters,female_sports);
+match.label = minWeightBipartiteMatching(clusters,female_sports); id = c(match.label); cm = cm[,id]
+#print(cm)
+knitr::kable(cm,caption = "Confusion Matrix (Clusters Represent Female Sports - k=9)")
+cat(" Error rate =",1-sum(diag(cm))/sum(cm),"\n")
+R2(x,clusters,2)
+```
+
+
+### Power/Endurance Sports
+
+```{r include=F}
+k=2; kmc = kmeans(x, k);
+clusters=kmc$cluster
+table(clusters)
+```
+
+Clustering into power and endurance related sports results in an error rate of 47%, which is similar to the results obtained by [Hierarchical] clustering. This leads us to conclude that the clusters don't represent power/endurance sports.
+```{r echo=F}
+cm=table(clusters,powend); #  plot(x,pch=19,col=hd.clust)
+match.label = minWeightBipartiteMatching(clusters,powend); id = c(match.label); cm = cm[,id]
+#print(cm)
+knitr::kable(cm,caption = "Confusion Matrix (Clusters Represent Gender)")
+cat(" Error rate =",1-sum(diag(cm))/sum(cm),"\n")
+R2(x,clusters,2)
+```
+
+
+# Conclusion
+
+To conclude, it's obvious that the data is most suitable for clustering male and female athletes. This is because the classification error is the lowest when \(k=2\) and when we compare the clusters to the class variable sex in the data. Even though we failed to cluster the data into sports, I'm still convinced it is possible with more data.
+\newline
+\par
+\noindent
+Also, I think clustering the sports into power and endurance would work well, however, my judgment of which sports were power/endurance heavy was not ideal. It is possible to look at all combinations and picking the one with the lowest error rate, however, that would take a lot of computation and time.
+\newline
+\par
+\noindent
+Finally, more data would provide more convincing results as in all clustering and classification problems.
+```{r echo=F}
+m = matrix(c(   '2.9%', '46%','60%','83%','56%',
+                '3.9%','47%','65%','87%','56%',
+                '2','2','10','8','9',
+                '202','202','202','102','100'),ncol=5,byrow=T)
+colnames(m) <- c('Sex','Power/Endurance','Sports','Sports (Male)','Sports (Female)')
+rownames(m) <- c('Hierarchical','k-Means','k','n')
+tab <- as.table(m)
+knitr::kable(tab,caption="Comparing Methods Error Rate", booktabs=T)
+```
+
+
+
+
+# Appendix
+## Pair Plots
+
+Clustering into sports
+```{r echo=F,out.width="70%",fig.align='center',fig.cap="Pairs Plot"}
+colors = c('black', 'red','blue','purple','pink','green','cornflowerblue','darkgoldenrod1','peachpuff3','turquoise3')[unclass(df$sport)]
+pairs(df[,9:11],col=colors)
+```
+Clustering into male and female
+```{r echo=F,out.width="70%",fig.align='center',fig.cap="Pairs Plot"}
+pairs(df[,6:9],col=colors_sex)
+```
+
+Clustering into Power-related and Endurance-related sports
+```{r echo=F,out.width="70%",fig.align='center',fig.cap="Pairs Plot"}
+pairs(df[,5:8],col=df$powend)
+```
+
+```{r echo=F,out.width="70%",fig.align='center',fig.cap="Pairs Plot"}
+pairs(df[,9:11],col=df$powend)
+```
+## Clustering Trials
+### Hierarchical (Euclidian and Ward D2)
+
+```{r echo=F}
+cm=table(clusterse,s);
+knitr::kable(cm,caption = "Confusion Matrix (Clusters Represent Gender)")
+cat(" Error rate =",1-sum(diag(cm))/sum(cm),"\n")
+```
+
+

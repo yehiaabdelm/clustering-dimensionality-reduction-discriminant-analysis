@@ -1,0 +1,245 @@
+---
+title: "Dimensionality Reduction on Australian Athletes Data"
+author: "Yehya Abdelmohsen"
+date: "5/14/2022"
+output: pdf_document
+header-includes:
+    \usepackage{float}
+    \floatplacement{figure}{H}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+\pagebreak
+\tableofcontents
+\pagebreak
+
+# Introduction
+The data presented contains information for athletes from different types of sports. The purpose of collecting the data was to test if blood hemoglobin levels are different when comparing endurance-related athletes to those in power-related events. In this analysis, we will aim to reduce the dimensionality of the data. We will compare two methods of dimensionality reduction, Principal Component Analysis (PCA) and Multidimensional Scaling (MDS).
+
+# About the Data
+The data presented contains information related to Australian athletes. It contains 202 observations where each observation represents an athlete. There are 13 variables including the class variable which represents the sport the athlete plays. It's important to note that categorical/qualitative variables will be removed before preforming PCA or MDS.
+\newline
+\par
+\noindent
+The data is obtained from R, its documentation is linked below.
+\newline
+\par
+\noindent
+Source: \url{https://vincentarelbundock.github.io/Rdatasets/doc/DAAG/ais.html}
+
+## Variables
+\begin{itemize}
+    \item Rcc - Red blood cell count. This is a quantitative variable.
+    \item Wcc - White blood cell count, per liter. This is a quantitative variable.
+    \item Hc - Percent of hematocrit. Hematocrit: The ratio of the volume of red blood cells to the total volume of blood. This is a quantitative variable.
+    \item Hg - Hemaglobin concentration in g per decaliter (10 liters). Hemaglobin: A protein that carries oxygen to organs. This is a quantitative variable.
+    \item Ferr - Plasma ferritins in ng. Measures the amount of ferritin in blood. Ferritin is a blood protein that contains iron. This is a quantitative variable.
+    \item Bmi - Body mass index, in kg/\(m^2\). Body mass divided by the square of the height \(m^2\). This is a quantitative variable.
+    \item Ssf - Sum of skin folds. Estimates the percentage of body fat by measuring skin fold thickness. This is a quantitative variable.
+    \item PcBfat - Percentage of body fat. This is a quantitative variable.
+    \item Lbm - Lean body mass in kg. Total body weight minus body fat weight. This is a quantitative variable.
+    \item Ht - Height in cm. This is a quantitative variable.
+    \item Wt - Weight in kg. This is a quantitative variable.
+    \item Sex - A factor representing the sex of the athlete: female and male. This is a qualitative categorical variable.
+    \item Sport - A factor representing the sport the athlete plays B Ball, Field, Gym, Netball, Row, Swim, T 400m, T Sprnt, Tennis, and W Polo. This is a qualitative categorical variable and will be used as the class variable.
+\end{itemize}
+
+Below is an initial look at the data.
+```{r echo=FALSE}
+df = read.csv("https://vincentarelbundock.github.io/Rdatasets/csv/DAAG/ais.csv",stringsAsFactors = T)
+df = df[,-1]
+knitr::kable(head(df[,1:6],2))
+knitr::kable(head(df[,7:13],2))
+```
+
+# Problem Statement
+The data contains quantitative variables we will be utilizing to reduce the dimension of the data. The aim of this analysis:
+\begin{itemize}
+  \item Reducing the dimensionality of the data.
+  \item Comparing PCA and MDS.
+\end{itemize}
+
+# Some Graphs
+
+```{r include=F}
+df = df[,-c(12,13)]
+head(df)
+```
+
+In Figure 1 we can see some obvious linear relationships. For example, red blood cell count (rcc) and hematocrit (hc) are linearly related. This is an obvious relationship when one knows that hematocrit is the ratio between red blood cell volume and the total blood volume. Another example is rcc and hemoglobin (hg), which is also obvious since hg is a protein that is inside red blood cells. The final obvious relationship is between hc and hg.
+```{r echo=F,out.width="60%",fig.align='center',fig.cap="Pair Plot"}
+pairs(df[,1:4])
+```
+
+In Figure 2, we can see one obvious linear relationship between sum of skin folds (ssf) and percentage of body fat (pcBfat). Sum of skin folds estimates the percentage of body fat by measuring skin fold thickness.
+```{r echo=F,out.width="60%",fig.align='center',fig.cap="Pair Plot"}
+pairs(df[,5:8])
+```
+In Figure 3, we can see some linear relationships between the variables lean body mass, height, and weight. These relationships are obvious and self explanatory.
+```{r echo=F,out.width="60%",fig.align='center',fig.cap="Pair Plot"}
+pairs(df[,9:11])
+```
+
+Looking at the plots in this section we find many linear relationships. This foreshadows the success of dimensionality reduction.
+
+# Principal Component Analysis
+## Non Robust
+We scale the data and compute the variance-covariance matrix.
+```{r}
+scaled_df = scale(df,center=TRUE,scale=TRUE)
+cov = cov(scaled_df)
+eig = eigen(cov)
+```
+
+We also compute the eigen values and eigen vectors of the variance-covariance matrix. The eigen values are shown below.
+```{r echo=F}
+knitr::kable(eig$values)
+```
+The cumulative sum of total variance explained by the principal components is shown below. Taking the first seven principal components would retain 99.35% of the total variance.
+```{r echo=F}
+knitr::kable(t(cumsum(eig$values*100/sum(eig$values))))
+```
+
+Again, the scree plot shows that taking the first seven PCs retains a good proportion of the variance. Anything after the seventh principal component will not add too much information.
+```{r echo=F,out.width="50%",fig.align='center',fig.cap="Scree Plot"}
+barplot(eig$values, names.arg=seq(1,11,1), main = "Scree Plot")
+```
+
+Below is a look at the new data after preforming PCA and removing the columns corresponding to the lowest eigen values.
+```{r}
+PC = scaled_df%*%eig$vectors
+knitr::kable(head(PC[,1:7],4))
+```
+
+## Robust
+We use BACON to remove the outliers and do robust PCA. Out of 202 observations, we find 8 outliers.
+```{r}
+library(robustX)
+out = mvBACON(scaled_df)
+robust_df = scaled_df[out$subset,]
+```
+
+We then compute the eigen values and eigen vectors of the covariance matrix:
+```{r}
+eig_pr = eigen(cov(robust_df))
+knitr::kable(eig_pr$values)
+```
+
+Looking at the scree plot I would make the same decision, which is taking the first 7 principal components.
+```{r echo=F,out.width="50%",fig.align='center',fig.cap="Scree Plot"}
+barplot(eig_pr$values[1:11], names.arg=seq(1,11,1), main = "Scree Plot")
+```
+The cumulative sum of total variance explained by the robust principal components is shown below. Taking the first seven principal components would retain 99.345% of the total variance. This is lower than non robust PCA by around 0.005%.
+```{r}
+knitr::kable(t(cumsum(eig_pr$values*100/sum(eig_pr$values))))
+```
+
+Below is a look at the new data after preforming PCA on the robust data and removing the columns corresponding to the lowest eigen values.
+```{r}
+robustPC = robust_df%*%eig_pr$vectors
+knitr::kable(head(robustPC[,1:7],4))
+```
+
+# Multidimensional Scaling
+
+## Non Robust
+Computing \(B\):
+$$
+B = XX^T
+$$
+```{r}
+B = scaled_df%*%t(scaled_df)
+```
+
+Getting the eigen values and eigen vectors of B:
+```{r}
+eig_B = eigen(B)
+```
+
+Computing W:
+$$
+W = V_{11}\Lambda^{1/2}_{11}
+$$
+```{r}
+W = eig_B$vec[,1:11]%*%diag(sqrt(abs(eig_B$val[1:11])))
+```
+
+Now we look at the scree plot to investigate the amount of variance retained by the components. We can see similar results to PCA, and I think choosing seven columns would be best.
+```{r echo=F,out.width="50%",fig.align='center',fig.cap="Scree Plot"}
+barplot(eig_B$values[1:11], names.arg=seq(1,11,1), main = "Scree Plot")
+```
+
+Also, looking at the cumulative sum we obtain the same results as PCA.
+```{r echo=F}
+cumsum(eig_B$values[1:11]*100/sum(eig_B$values[1:11]))
+```
+
+Therefore, we will be choosing the first seven components from W. Below are the resulting columns.
+```{r echo=F}
+knitr::kable(head(W[,1:7],4))
+```
+
+
+## Robust
+Computing the robust \(B\):
+```{r}
+Brobust = robust_df%*%t(robust_df)
+```
+
+Computing eigen values of the robust \(B\):
+```{r}
+eig_Br = eigen(Brobust)
+knitr::kable(eig_Br$values[1:11])
+```
+
+Computing the robust \(W\):
+```{r}
+Wrobust = eig_Br$vec[,1:11]%*%diag(sqrt(abs(eig_Br$val[1:11])))
+```
+
+Now we look at the scree plot to investigate the amount of variance retained by the components. We can see similar results to PCA, and I think choosing seven columns would be best.
+```{r echo=F,out.width="50%",fig.align='center',fig.cap="Scree Plot"}
+barplot(eig_Br$values[1:11], names.arg=seq(1,11,1), main = "Scree Plot")
+```
+
+Also, looking at the cumulative sum we obtain the same results as the robust PCA.
+```{r echo=F}
+cumsum(eig_Br$values[1:11]*100/sum(eig_Br$values[1:11]))
+```
+
+Therefore, we will be choosing the first seven components from the robust W. Below are the resulting robust columns.
+```{r echo=F}
+knitr::kable(head(Wrobust[,1:7],4))
+```
+
+
+# Conclusion
+
+In conclusion, there is no drastic difference between doing dimensionality reduction with the robust data and with all the data. This is because the number of outliers in the data accounts for around 4%. Therefore, we reached the same conclusions from robust and non robust dimensionality reduction.
+\newline
+\noindent
+\par
+We also conclude that the two methods, PCA and MDS provide very similar results. The components obtained from MDS and those obtained from PCA provide identical PCs but with opposite signs. Also, the first \(p=11\) eigen values of the B matrix in MDS and the matrix X in PCA are not identical. However, an interesting observation is that when we multiply the eigen values of X by \((n-1)\) where \(n=202\) in our case, we obtain the eigen values of B. Conversely, if we divide the eigen values of the B matrix by \((n-1)\), we obtain the eigen values of X. An example of the first case is provided below.
+```{r}
+n=202
+eig$values*(n-1)
+```
+
+```{r}
+eig_B$values[1:11]
+```
+
+
+# Appendix
+
+```{r}
+pairs(df)
+```
+
+
+
+
+

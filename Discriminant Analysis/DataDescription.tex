@@ -1,0 +1,52 @@
+\documentclass{article}
+\usepackage[utf8]{inputenc}
+\usepackage{url}
+
+\title{Mobile Phone Data}
+\author{Yehya Abdelmohsen (900193174)}
+\date{April 2022}
+
+\begin{document}
+
+\maketitle
+
+\section{About the Data}
+The data presented contains information related to mobile phones. It contains 21 variables. The data is already split into training and testing. The training data contains 2000 observations. The testing data contains 1000 observations, however, it does not contain the class variable. Therefore, we will not be able to use it to calculate external classification error, and we will have to split our training data into training and testing again.
+\newline
+\par
+\noindent
+The data is obtained from the kaggle website, linked below.
+\newline
+\par
+\noindent
+Source: \url{https://www.kaggle.com/datasets/iabhishekofficial/mobile-price-classification}
+
+
+\section{Variables}
+\begin{itemize}
+    \item Battery power - Total energy a battery can store in one time in mAh. This is a quantitative variable.
+    \item Blue - Whether the phone has bluetooth or not. This is a qualitative binary variable i.e. 0 or 1.
+    \item Clock speed - Speed at which the processor executes instructions in GHz. This is a quantitative variable.
+    \item Dual sim - Whether the phone has dual sim support or not. This is a qualitative binary variable.
+    \item Fc - Front camera megapixels. One megapixel is a million pixels. This is a quantitative variable.
+    \item Four g - Whether the phone has 4g or not. This is a qualitative binary variable.
+    \item Int memory - Internal memory in GB. This is a quantitative variable.
+    \item M dep - Mobile depth in cm. This is a quantitative variable.
+    \item Mobile wt - Weight of mobile phone in grams. This is a quantitative variable.
+    \item N cores - Number of cores of the processor. This is a quantitative variable.
+    \item Pc - Primary camera megapixels. This is a quantitative variable.
+    \item Px height - Pixel resolution height. This is a quantitative variable.
+    \item Px width - Pixel resolution width. This is a quantitative variable.
+    \item Ram - Random access memory in MB. This is a quantitative variable.
+    \item Sc h - Screen height of mobile in cm. This is a quantitative variable.
+    \item Sc w - Screen width of mobile in cm. This is a quantitative variable.
+    \item Talk time - Longest time that a single battery charge will last when you are using the calling someone on the phone. This is a quantitative variable.
+    \item Three g - Has 3g or not. This is a qualitative binary variable.
+    \item Touch screen - Has a touch screen or not. This is a qualitative binary variable.
+    \item Wifi - Has wifi or not. This is a qualitative binary variable.
+    \item Price range - Low cost (0), medium cost (1), high cost (2), and very high cost (3). This is a qualitative categorical variable.
+\end{itemize}
+
+
+
+\end{document}
